@@ -20,6 +20,7 @@ class STLS1(object):
     def create_stream(self, dir, port_id):
         src_ip4 = "192.168.3.2"
         dst_ip4 = "192.168.3.1"
+        nat_dst_ip4 = "10.168.3.1"
 
         src_ip6 = "::3:2"
         dst_ip6 = "::3:1"
@@ -88,8 +89,11 @@ class STLS1(object):
             / IGMP(type=22, gaddr="224.3.0.1")
         )
 
-        # 报文生成中的自变量设置
+        # --报文生成中的自变量设置--
+        # 无变量
         no_vm = STLScVmRaw()
+
+        # ipv4 src IP 变量
         vm4 = STLScVmRaw(
             [
                 STLVmFlowVar(
@@ -107,6 +111,27 @@ class STLS1(object):
             ],
             cache_size=255,  # the cache size
         )
+
+        # ipv4 nat dst IP 变量
+        vm4_nat = STLScVmRaw(
+            [
+                STLVmFlowVar(
+                    name="ip4_dst",
+                    min_value="10.168.3.1",
+                    max_value="10.168.3.255",
+                    size=4,
+                    step=1,
+                    op="inc",
+                ),
+                STLVmWrFlowVar(
+                    fv_name="ip4_dst", pkt_offset="IP.dst"
+                ),  # write ip to packet IP.src
+                STLVmFixIpv4(offset="IP"),  # fix checksum
+            ],
+            cache_size=255,  # the cache size
+        )
+
+        # ipv6 src IP 变量
         vm6 = STLScVmRaw(
             [
                 STLVmFlowVar(
@@ -132,53 +157,75 @@ class STLS1(object):
             # IPv4 UDP
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt4_udp, 66), vm=vm4),
-                mode=STLTXCont(pps=50000),
+                mode=STLTXCont(pps=25000),
                 flow_stats=STLFlowStats(pg_id=1),
             ),
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt4_udp, 9000), vm=vm4),
-                mode=STLTXCont(pps=50000),
+                mode=STLTXCont(pps=25000),
                 flow_stats=STLFlowStats(pg_id=2),
+            ),
+            # IPv4 UDP NAT
+            STLStream(
+                packet=STLPktBuilder(pkt=add_padding(pkt4_udp, 66), vm=vm4_nat),
+                mode=STLTXCont(pps=25000),
+                flow_stats=STLFlowStats(pg_id=3),
+            ),
+            STLStream(
+                packet=STLPktBuilder(pkt=add_padding(pkt4_udp, 9000), vm=vm4_nat),
+                mode=STLTXCont(pps=25000),
+                flow_stats=STLFlowStats(pg_id=4),
             ),
             # IPv4 TCP
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt4_tcp, 66), vm=vm4),
-                mode=STLTXCont(pps=50000),
-                flow_stats=STLFlowStats(pg_id=3),
+                mode=STLTXCont(pps=25000),
+                flow_stats=STLFlowStats(pg_id=5),
             ),
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt4_tcp, 9000), vm=vm4),
-                mode=STLTXCont(pps=50000),
-                flow_stats=STLFlowStats(pg_id=4),
+                mode=STLTXCont(pps=25000),
+                flow_stats=STLFlowStats(pg_id=6),
+            ),
+            # IPv4 TCP NAT
+            STLStream(
+                packet=STLPktBuilder(pkt=add_padding(pkt4_tcp, 66), vm=vm4_nat),
+                mode=STLTXCont(pps=25000),
+                flow_stats=STLFlowStats(pg_id=7),
+            ),
+            STLStream(
+                packet=STLPktBuilder(pkt=add_padding(pkt4_tcp, 9000), vm=vm4_nat),
+                mode=STLTXCont(pps=25000),
+                flow_stats=STLFlowStats(pg_id=8),
             ),
             # IPv6 UDP
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt6_udp, 66), vm=vm6),
                 mode=STLTXCont(pps=50000),
-                flow_stats=STLFlowStats(pg_id=5),
+                flow_stats=STLFlowStats(pg_id=9),
             ),
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt6_udp, 9000), vm=vm6),
                 mode=STLTXCont(pps=50000),
-                flow_stats=STLFlowStats(pg_id=6),
+                flow_stats=STLFlowStats(pg_id=10),
             ),
             # IPv6 TCP
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt6_tcp, 66), vm=vm6),
                 mode=STLTXCont(pps=50000),
-                flow_stats=STLFlowStats(pg_id=7),
+                flow_stats=STLFlowStats(pg_id=11),
             ),
             STLStream(
                 packet=STLPktBuilder(pkt=add_padding(pkt6_tcp, 9000), vm=vm6),
                 mode=STLTXCont(pps=50000),
-                flow_stats=STLFlowStats(pg_id=8),
+                flow_stats=STLFlowStats(pg_id=12),
             ),
 
             # DHCP
             STLStream(
                 packet=STLPktBuilder(pkt=dhcp_pkt, vm=no_vm),
                 mode=STLTXCont(pps=500),
-                flow_stats=STLFlowStats(pg_id=11),
+                flow_stats=STLFlowStats(pg_id=21),
             ),
             # ARP（没有IP层报文，不可以加flow_stats属性）
             STLStream(
@@ -193,25 +240,25 @@ class STLS1(object):
             STLStream(
                 packet=STLPktBuilder(pkt=icmp_pkt, vm=no_vm),
                 mode=STLTXCont(pps=10),
-                flow_stats=STLFlowStats(pg_id=12),
+                flow_stats=STLFlowStats(pg_id=22),
             ),
             # 广播报文
             STLStream(
                 packet=STLPktBuilder(pkt=broadcast_pkt, vm=no_vm),
                 mode=STLTXCont(pps=10000),
-                flow_stats=STLFlowStats(pg_id=13),
+                flow_stats=STLFlowStats(pg_id=23),
             ),
             # IGMPv2
             STLStream(
                 packet=STLPktBuilder(pkt=igmpv2_pkt, vm=no_vm),
                 mode=STLTXCont(pps=1000),
-                flow_stats=STLFlowStats(pg_id=14),
+                flow_stats=STLFlowStats(pg_id=24),
             ),
             # 主机报文
             STLStream(
                 packet=STLPktBuilder(pkt=host_pkt, vm=no_vm),
                 mode=STLTXCont(pps=500),
-                flow_stats=STLFlowStats(pg_id=15),
+                flow_stats=STLFlowStats(pg_id=25),
             ),
         ]
         return stream
