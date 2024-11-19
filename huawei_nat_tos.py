@@ -4,8 +4,8 @@ import argparse
 from scapy import *
 from scapy.contrib.igmp import *
 
-ip4_pps = 1
-ip6_pps = 1
+ip4_pps = 25000
+ip6_pps = 50000
 
 # Add padding to packet
 def add_padding(packet: Packet, size: int) -> Packet:
