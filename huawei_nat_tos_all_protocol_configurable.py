@@ -182,9 +182,10 @@ class STLS1(object):
         # STLPktBuilder 构建Trex报文，传入scapy构造的报文和变量设置
         # 构造网络流，这里可以控制报文的pps(会被start的 -m 参数覆盖)，延迟流的pg_id(分组id)
         stream = [
-            # IPv4 UDP NAT
+            # IPv4 流量一半走NAT，一半不走
+            # IPv4 UDP
             STLStream(
-                packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(pkt4_udp, 1), self.big_packet_padding), vm=vm4_nat),
+                packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(pkt4_udp, 1), self.big_packet_padding), vm=vm4),
                 mode=STLTXCont(pps=self.ip4_pps),
                 flow_stats=STLFlowStats(pg_id=1),
             ),
