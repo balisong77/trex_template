@@ -39,10 +39,23 @@ class STLS1(object):
         self.src_mac = node3_src_mac
         self.dst_mac = node5_dst_mac
         self.trex_rx_mac = node3_trex_rx_mac
-        # 流量比例
-        self.ip4_pps = 20
-        self.ip6_pps = 20
-        self.other_pps = 1
+        # 大小流协议个数，目前只支持参数修改小流协议个数
+        self.small_flow_count = 4
+        self.big_flow_count = 4
+        # 大小流pps比例
+        self.small_flow_pps = 20
+        self.big_flow_pps = 1
+        # 实际流量比例需通过计算得出，来维持大小流整体比例和big_flow_pps:small_flow_pps一致
+        # 需用calculate_actual_pps()计算，用另一边的协议数量乘自己的pps
+        self.ip4_pps = 0
+        self.ip6_pps = 0
+        self.other_pps = 0
+        self.calculate_actual_pps()
+
+    def calculate_actual_pps(self):
+        self.ip4_pps = self.small_flow_count * self.big_flow_pps
+        self.ip6_pps = self.small_flow_count * self.big_flow_pps
+        self.other_pps = self.big_flow_count * self.small_flow_pps
 
     def create_stream(self, dir, port_id):
         src_ip4 = "192.168.3.2"
@@ -181,46 +194,54 @@ class STLS1(object):
 
         # STLPktBuilder 构建Trex报文，传入scapy构造的报文和变量设置
         # 构造网络流，这里可以控制报文的pps(会被start的 -m 参数覆盖)，延迟流的pg_id(分组id)
-        stream = [
-            # IPv4 流量一半走NAT，一半不走
+        big_flow_stream = [
             # IPv4 UDP
             STLStream(
+                name="IPv4 UDP",
                 packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(pkt4_udp, 1), self.big_packet_padding), vm=vm4),
                 mode=STLTXCont(pps=self.ip4_pps),
                 flow_stats=STLFlowStats(pg_id=1),
             ),
             # IPv4 TCP NAT
             STLStream(
+                name="IPv4 TCP NAT",
                 packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(pkt4_tcp, 2), self.big_packet_padding), vm=vm4_nat),
                 mode=STLTXCont(pps=self.ip4_pps),
                 flow_stats=STLFlowStats(pg_id=2),
             ),
             # IPv6 UDP
             STLStream(
+                name="IPv6 UDP",
                 packet=STLPktBuilder(pkt=add_padding(change_ip6_tc(pkt6_udp, 3), self.big_packet_padding), vm=vm6),
                 mode=STLTXCont(pps=self.ip6_pps),
                 flow_stats=STLFlowStats(pg_id=3),
             ),
             # IPv6 TCP
             STLStream(
+                name="IPv6 TCP",
                 packet=STLPktBuilder(pkt=add_padding(change_ip6_tc(pkt6_tcp, 4), self.big_packet_padding), vm=vm6),
                 mode=STLTXCont(pps=self.ip6_pps),
                 flow_stats=STLFlowStats(pg_id=4),
             ),
+        ]
 
-            # ARP（没有IP层报文，不可以加flow_stats属性）
+        small_flow_stream = [
+                        # ARP（没有IP层报文，不可以加flow_stats属性）
             STLStream(
+                name="ARP",
                 packet=STLPktBuilder(pkt=add_padding(arp_pkt, self.small_packet_padding), vm=no_vm),
                 mode=STLTXCont(pps=self.other_pps),
             ),
             # ICMP
             STLStream(
+                name="ICMP",
                 packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(icmp_pkt, 6), self.small_packet_padding), vm=no_vm),
                 mode=STLTXCont(pps=self.other_pps),
                 flow_stats=STLFlowStats(pg_id=6),
             ),
             # IGMPv2
             STLStream(
+                name="IGMPv2",
                 # IGMPv2 无法添加padding，因为IGMPv2报文长度固定，不然会导致checksum错误
                 packet=STLPktBuilder(pkt=change_ip4_tos(igmpv2_pkt, 7), vm=no_vm),
                 mode=STLTXCont(pps=self.other_pps),
@@ -228,12 +249,18 @@ class STLS1(object):
             ),
             # 主机报文
             STLStream(
+                name="Host Packet",
                 packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(host_pkt, 8), self.small_packet_padding), vm=no_vm),
                 mode=STLTXCont(pps=self.other_pps),
                 flow_stats=STLFlowStats(pg_id=8),
             ),
         ]
-        return stream
+
+        # 大小流协议取前small_flow_count个协议
+        small_flow_stream = small_flow_stream[:self.small_flow_count]
+        big_flow_stream = big_flow_stream[:self.big_flow_count]
+
+        return big_flow_stream + small_flow_stream
 
     def get_streams(self, direction, tunables, **kwargs):
         parser = argparse.ArgumentParser(
@@ -270,7 +297,27 @@ class STLS1(object):
         parser.add_argument(
             "--other_pps",
             type=int,
-            help="The packets per second for other mice flows",
+            help="The packets per second for other four small flows",
+        )
+        parser.add_argument(
+            "--small_flow_count",
+            type=int,
+            help="Small flow count in traffic profile",
+        )
+        parser.add_argument(
+            "--big_flow_count",
+            type=int,
+            help="Big flow count in traffic profile",
+        )
+        parser.add_argument(
+            "--small_flow_pps",
+            type=int,
+            help="Uniformly control four small flows pps",
+        )
+        parser.add_argument(
+            "--big_flow_pps",
+            type=int,
+            help="Uniformly control four big flows",
         )
 
         args = parser.parse_args(tunables)
@@ -297,8 +344,29 @@ class STLS1(object):
             else:
                 raise ValueError("Invalid trex server node")
         else:
-            print("Using default trex server node3...")
-        return self.create_stream(direction, kwargs["port_id"])
+            print("Using default MAC setting for node3...")
+        # 根据小流协议数量控制流量比例
+        if args.small_flow_count is not None:
+            self.small_flow_count = args.small_flow_count
+            self.calculate_actual_pps()
+        if args.big_flow_count is not None:
+            self.big_flow_count = args.big_flow_count
+            self.calculate_actual_pps()
+        if args.small_flow_pps is not None:
+            self.small_flow_pps = args.small_flow_pps
+            self.calculate_actual_pps()
+        if args.big_flow_pps is not None:
+            self.big_flow_pps = args.big_flow_pps
+            self.calculate_actual_pps()
+
+        stream: list[STLStream] = self.create_stream(direction, kwargs["port_id"])
+        print("-----------------------------------------")
+        print(f"Current traffic setting:\n-> {self.__dict__}")
+        print(f"Current stream: ")
+        for i, s in enumerate(stream):
+            print(f"{i}. {s.name}")
+        print("-----------------------------------------")
+        return stream
 
 
 # dynamic load - used for trex console or simulator
