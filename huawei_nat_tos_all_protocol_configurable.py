@@ -43,8 +43,8 @@ class STLS1(object):
         self.small_flow_count = 4
         self.big_flow_count = 4
         # 大小流pps比例
-        self.small_flow_pps = 20
-        self.big_flow_pps = 1
+        self.small_flow_pps = 1
+        self.big_flow_pps = 20
         # 实际流量比例需通过计算得出，来维持大小流整体比例和big_flow_pps:small_flow_pps一致
         # 需用calculate_actual_pps()计算，用另一边的协议数量乘自己的pps
         self.ip4_pps = 0
@@ -226,7 +226,7 @@ class STLS1(object):
         ]
 
         small_flow_stream = [
-                        # ARP（没有IP层报文，不可以加flow_stats属性）
+            # ARP（没有IP层报文，不可以加flow_stats属性）
             STLStream(
                 name="ARP",
                 packet=STLPktBuilder(pkt=add_padding(arp_pkt, self.small_packet_padding), vm=no_vm),
