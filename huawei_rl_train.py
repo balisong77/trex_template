@@ -4,8 +4,8 @@ import argparse
 from scapy import *
 from scapy.contrib.igmp import *
 
-ip4_pps = 20
-ip6_pps = 20
+ip4_pps = 10
+ip6_pps = 10
 other_pps = 1
 
 big_packet_padding = 66
@@ -217,7 +217,7 @@ class STLS1(object):
             ),
             # IGMPv2
             STLStream(
-                packet=STLPktBuilder(pkt=add_padding(change_ip4_tos(igmpv2_pkt, 7), small_packet_padding), vm=no_vm),
+                packet=STLPktBuilder(pkt=change_ip4_tos(igmpv2_pkt, 7), vm=no_vm),
                 mode=STLTXCont(pps=other_pps),
                 flow_stats=STLFlowStats(pg_id=7),
             ),

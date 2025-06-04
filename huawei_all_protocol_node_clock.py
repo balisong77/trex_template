@@ -9,7 +9,7 @@ ip4_pps = 1
 ip6_pps = 1
 other_pps = 1
 
-big_packet_padding = 1500
+big_packet_padding = 66
 small_packet_padding = 66
 
 # node 2&4

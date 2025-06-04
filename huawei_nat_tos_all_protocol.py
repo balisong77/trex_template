@@ -4,8 +4,8 @@ import argparse
 from scapy import *
 from scapy.contrib.igmp import *
 
-ip4_pps = 20
-ip6_pps = 20
+ip4_pps = 10
+ip6_pps = 10
 other_pps = 1
 
 big_packet_padding = 1500
@@ -15,10 +15,10 @@ small_packet_padding = 66
 src_mac = "6c:b3:11:21:b6:60" # node4 ens2f0
 dst_mac = "6c:b3:11:21:b6:58" # node2 ens2f0
 trex_rx_mac = '6c:b3:11:21:b6:62' # node4 ens2f1
-# node 3&5
-src_mac = "04:3f:72:f4:40:4b" # node5 ens2f1np1
-dst_mac = "04:3f:72:f4:41:16" # node3 ens5f0np0
-trex_rx_mac = '04:3f:72:f4:40:4a' # node5 ens2f0np0
+# # node 3&5
+# src_mac = "04:3f:72:f4:40:4b" # node5 ens2f1np1
+# dst_mac = "04:3f:72:f4:41:16" # node3 ens5f0np0
+# trex_rx_mac = '04:3f:72:f4:40:4a' # node5 ens2f0np0
 
 # Add padding to packet
 def add_padding(packet: Packet, size: int) -> Packet:
